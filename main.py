@@ -166,10 +166,10 @@ def dashboard():
             }}
             form {{
               background: #fff;
-              padding: 1rem;
+              padding: 1.5rem 2rem;
               border-radius: 16px;
               box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-              max-width: 500px;
+              max-width: 900px;
               margin: 2rem auto;
             }}
             input[type=number] {{
@@ -201,16 +201,21 @@ def dashboard():
             .log-row {{
               display: flex;
               flex-wrap: nowrap;
-              gap: 1rem;
+              gap: 2rem;
               align-items: center;
-              justify-content: center;
+              justify-content: flex-start;
             }}
             .log-row label {{
               font-weight: 500;
+              white-space: nowrap;
             }}
             .log-row input[type=number] {{
               width: 70px;
-              margin-left: 0.35rem;
+            }}
+            .log-row > div {{
+              display: flex;
+              align-items: center;
+              gap: 0.35rem;
             }}
         </style>
     </head>
