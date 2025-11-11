@@ -198,6 +198,20 @@ def dashboard():
             th {{
               background-color: #e9d5ff;
             }}
+            .log-row {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 0.75rem;
+              align-items: center;
+              justify-content: center;
+            }}
+            .log-row label {{
+              font-weight: 500;
+            }}
+            .log-row input[type=number] {{
+              width: 70px;
+              margin-left: 0.35rem;
+            }}
         </style>
     </head>
     <body>
@@ -235,11 +249,13 @@ def dashboard():
 
       <form method="post" action="/log">
         <h2>Log Today</h2>
-        <label>Beers:</label><input type="number" name="beers" min="0" max="10" required><br>
-        <label>Walk (km):</label><input type="number" name="walk_km" step="0.1" required><br>
-        <label>Meals:</label><input type="number" name="meals" min="0" max="3" required><br>
-        <label>Sleep (h):</label><input type="number" name="sleep_h" step="0.1" required><br>
-        <button type="submit">Save today</button>
+        <div class="log-row">
+          <div><label>Beers</label><input type="number" name="beers" min="0" max="10" required></div>
+          <div><label>Walk (km)</label><input type="number" name="walk_km" step="0.1" required></div>
+          <div><label>Meals</label><input type="number" name="meals" min="0" max="3" required></div>
+          <div><label>Sleep (h)</label><input type="number" name="sleep_h" step="0.1" required></div>
+          <button type="submit">Save</button>
+        </div>
       </form>
 
       <table>
@@ -249,6 +265,49 @@ def dashboard():
     for d, e in sorted(data.items(), reverse=True):
         html += f"<tr><td>{d}</td><td>{e['beers']}</td><td>{e['walk_km']}</td><td>{e['meals']}</td><td>{e['sleep_h']}</td></tr>"
     html += "</table>"
+
+    # 4-week breakdown tables, aligned with plan
+    week_configs = [
+        ("Week 1 – Alternate & Hydrate",
+         "Break the autopilot. Alternate beers with soda, hit daily walking baseline, keep sleep steady."),
+        ("Week 2 – Controlled Ritual",
+         "Tighten control. Cap beers, keep movement up, let body adapt to lower alcohol load."),
+        ("Week 3 – Lean Burn Stage",
+         "Now the engine runs hot. Fewer beers, consistent steps and sleep - visceral fat starts to move."),
+        ("Week 4 – Maintain & Reward",
+         "Lock it in. Mostly clean days, a couple of controlled treat nights, habits feel normal.")
+    ]
+
+    # Choose starting point: either first log date or today
+    start_date = first_logged_date if data else today
+
+    for idx, (week_title, week_desc) in enumerate(week_configs):
+        week_start = start_date + timedelta(days=idx * 7)
+        html += f"<h2 style='margin-top:2rem;'>{week_title}</h2>"
+        html += f"<p style='margin-top:0.25rem;margin-bottom:0.5rem;color:#4b5563;font-size:0.9rem;'>{week_desc}</p>"
+        html += "<table class='week-table' style='width:100%;border-collapse:collapse;margin-top:0.25rem;'>"
+        html += "<tr><th>Day</th><th>Walk ✓</th><th>Healthy Meals ✓</th><th>Beers (Count)</th><th>Sleep ✓</th></tr>"
+        for i in range(7):
+            day_date = week_start + timedelta(days=i)
+            day_label = day_date.strftime("%a %d.%m")
+            entry = data.get(str(day_date))
+            if entry:
+                walk_val = f"{entry['walk_km']} km"
+                meals_val = str(entry['meals'])
+                beers_val = str(entry['beers'])
+                sleep_val = f"{entry['sleep_h']} h"
+            else:
+                walk_val = meals_val = beers_val = sleep_val = ""
+            html += (
+                "<tr>"
+                f"<td style='border:1px solid #ccc;padding:4px;text-align:center;'>{day_label}</td>"
+                f"<td style='border:1px solid #ccc;padding:4px;text-align:center;'>{walk_val}</td>"
+                f"<td style='border:1px solid #ccc;padding:4px;text-align:center;'>{meals_val}</td>"
+                f"<td style='border:1px solid #ccc;padding:4px;text-align:center;'>{beers_val}</td>"
+                f"<td style='border:1px solid #ccc;padding:4px;text-align:center;'>{sleep_val}</td>"
+                "</tr>"
+            )
+        html += "</table>"
 
     # Chart.js visual - last 14 days, including baseline (plan) and actual
     # Collect all dates from baseline and predictions so we can show deviation vs plan
