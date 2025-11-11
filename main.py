@@ -17,7 +17,6 @@ def save_data(data):
     DATA_FILE.write_text(json.dumps(data, indent=2))
 
 def weekly_summary(data):
-    # Compute 7-day rolling averages
     today = datetime.now().date()
     past_week = [today - timedelta(days=i) for i in range(7)]
     subset = [data.get(str(d)) for d in reversed(past_week) if str(d) in data]
@@ -28,7 +27,6 @@ def weekly_summary(data):
         "avg_beers": avg("beers"),
         "avg_walk": avg("walk_km"),
         "avg_sleep": avg("sleep_h"),
-        "avg_water": avg("water_l"),
     }
 
 @app.get("/", response_class=HTMLResponse)
@@ -38,7 +36,6 @@ def dashboard():
     target_beers = 4
     target_walk = 10
     target_sleep = 7
-    target_water = 2.5
 
     def indicator(current, target, inverse=False):
         if not current:
@@ -73,7 +70,7 @@ def dashboard():
               background: white;
               border-radius: 16px;
               padding: 1rem;
-              width: 22%;
+              width: 28%;
               box-shadow: 0 2px 5px rgba(0,0,0,0.1);
               text-align: center;
             }}
@@ -133,11 +130,6 @@ def dashboard():
           <div class="indicator" style="background-color:{indicator(summary.get('avg_walk'), target_walk)}"></div>
         </div>
         <div class="card">
-          <h3>Avg Water (L)</h3>
-          <p>{summary.get("avg_water", "–")}</p>
-          <div class="indicator" style="background-color:{indicator(summary.get('avg_water'), target_water)}"></div>
-        </div>
-        <div class="card">
           <h3>Avg Sleep (h)</h3>
           <p>{summary.get("avg_sleep", "–")}</p>
           <div class="indicator" style="background-color:{indicator(summary.get('avg_sleep'), target_sleep)}"></div>
@@ -151,20 +143,19 @@ def dashboard():
         <label>Beers:</label><input type="number" name="beers" min="0" max="10" required><br>
         <label>Walk (km):</label><input type="number" name="walk_km" step="0.1" required><br>
         <label>Meals:</label><input type="number" name="meals" min="0" max="3" required><br>
-        <label>Water (L):</label><input type="number" name="water_l" step="0.1" required><br>
         <label>Sleep (h):</label><input type="number" name="sleep_h" step="0.1" required><br>
         <button type="submit">Save today</button>
       </form>
 
       <table>
-        <tr><th>Date</th><th>Beers</th><th>Walk</th><th>Meals</th><th>Water</th><th>Sleep</th></tr>
+        <tr><th>Date</th><th>Beers</th><th>Walk</th><th>Meals</th><th>Sleep</th></tr>
     """
 
     for d, e in sorted(data.items(), reverse=True):
-        html += f"<tr><td>{d}</td><td>{e['beers']}</td><td>{e['walk_km']}</td><td>{e['meals']}</td><td>{e['water_l']}</td><td>{e['sleep_h']}</td></tr>"
+        html += f"<tr><td>{d}</td><td>{e['beers']}</td><td>{e['walk_km']}</td><td>{e['meals']}</td><td>{e['sleep_h']}</td></tr>"
     html += "</table>"
 
-    # Chart.js
+    # Chart.js visual
     labels = [d for d in sorted(data.keys())[-14:]]
     beers = [data[d]["beers"] for d in labels]
     walks = [data[d]["walk_km"] for d in labels]
@@ -191,9 +182,9 @@ def dashboard():
     return html
 
 @app.post("/log")
-def log(beers: int = Form(...), walk_km: float = Form(...), meals: int = Form(...), water_l: float = Form(...), sleep_h: float = Form(...)):
+def log(beers: int = Form(...), walk_km: float = Form(...), meals: int = Form(...), sleep_h: float = Form(...)):
     data = load_data()
     today = str(date.today())
-    data[today] = dict(beers=beers, walk_km=walk_km, meals=meals, water_l=water_l, sleep_h=sleep_h)
+    data[today] = dict(beers=beers, walk_km=walk_km, meals=meals, sleep_h=sleep_h)
     save_data(data)
     return RedirectResponse("/", status_code=303)
