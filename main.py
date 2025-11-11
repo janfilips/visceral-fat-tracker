@@ -111,6 +111,7 @@ def dashboard():
 
     pred_curve = prediction_curve(data, target_beers=target_beers, target_walk=target_walk, target_sleep=target_sleep)
     visceral = visceral_curve(pred_curve)
+    visceral_planned = visceral_curve(baseline)
 
     def compute_deviation(pred, base):
         common = [d for d in pred.keys() if d in base]
@@ -260,6 +261,7 @@ def dashboard():
     planned = [baseline.get(d) for d in labels]
     actual = [pred_curve.get(d) if d in pred_curve else None for d in labels]
     visceral_vals = [visceral.get(d) if d in visceral else None for d in labels]
+    visceral_planned_vals = [visceral_planned.get(d) if d in visceral_planned else None for d in labels]
 
     import json as _json
 
@@ -269,6 +271,7 @@ def dashboard():
     planned_js = _json.dumps(planned)
     actual_js = _json.dumps(actual)
     visceral_js = _json.dumps(visceral_vals)
+    visceral_planned_js = _json.dumps(visceral_planned_vals)
 
     html += f"""
       <script>
@@ -319,10 +322,21 @@ def dashboard():
                 yAxisID: 'y1'
               }},
               {{
-                label: 'Visceral burn phase %',
+                label: 'Visceral burn phase (plan) %',
+                data: {visceral_planned_js},
+                borderColor: '#4ade80',
+                backgroundColor: 'rgba(74,222,128,0.10)',
+                borderDash: [4,3],
+                fill: false,
+                spanGaps: true,
+                tension: 0.25,
+                yAxisID: 'y1'
+              }},
+              {{
+                label: 'Visceral burn phase (actual) %',
                 data: {visceral_js},
                 borderColor: '#22c55e',
-                backgroundColor: 'rgba(34,197,94,0.12)',
+                backgroundColor: 'rgba(34,197,94,0.18)',
                 fill: false,
                 spanGaps: true,
                 tension: 0.25,
@@ -367,7 +381,7 @@ def dashboard():
                 callbacks: {{
                   label: function(context) {{
                     const label = context.dataset.label || '';
-                    if (label.includes('progress')) {{
+                    if (label.includes('progress') || label.includes('Visceral burn')) {{
                       return label + ': ' + context.parsed.y + '%';
                     }}
                     return label + ': ' + (context.parsed.y !== null ? context.parsed.y : '-');
