@@ -177,8 +177,8 @@ def dashboard():
               margin-left: 1rem;
             }}
             button {{
-              margin-top: 1rem;
-              padding: 8px 16px;
+              margin: 0;
+              padding: 8px 20px;
               background-color: #8b5cf6;
               color: white;
               border: none;
@@ -200,8 +200,8 @@ def dashboard():
             }}
             .log-row {{
               display: flex;
-              flex-wrap: wrap;
-              gap: 0.75rem;
+              flex-wrap: nowrap;
+              gap: 1rem;
               align-items: center;
               justify-content: center;
             }}
@@ -254,7 +254,7 @@ def dashboard():
           <div><label>Walk (km)</label><input type="number" name="walk_km" step="0.1" required></div>
           <div><label>Meals</label><input type="number" name="meals" min="0" max="3" required></div>
           <div><label>Sleep (h)</label><input type="number" name="sleep_h" step="0.1" required></div>
-          <button type="submit">Save</button>
+          <div><button type="submit">Save</button></div>
         </div>
       </form>
 
