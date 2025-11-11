@@ -29,6 +29,47 @@ def weekly_summary(data):
         "avg_sleep": avg("sleep_h"),
     }
 
+def prediction_curve(data, target_beers=4, target_walk=10, target_sleep=7):
+    # Simple heuristic projection:
+    # good days push the score up, bad days slow or drop it.
+    # Result is a 0-100 "progress" index, not medical truth.
+    dates = sorted(data.keys())
+    progress = {}
+    score = 0.0
+
+    for d in dates:
+        entry = data[d]
+        daily = 0.0
+
+        # Walking contribution
+        walk = entry.get("walk_km", 0)
+        if walk >= target_walk:
+            daily += 0.6
+        elif walk >= target_walk * 0.5:
+            daily += 0.3
+        else:
+            daily -= 0.2
+
+        # Beer contribution (less is better)
+        beers = entry.get("beers", 0)
+        if beers <= target_beers:
+            daily += 0.6
+        else:
+            daily -= 0.3 * (beers - target_beers)
+
+        # Sleep contribution
+        sleep = entry.get("sleep_h", 0)
+        if sleep >= target_sleep:
+            daily += 0.3
+        elif sleep < 6:
+            daily -= 0.2
+
+        # Update cumulative score and clamp between 0 and 100
+        score = max(0.0, min(100.0, score + daily))
+        progress[d] = round(score, 1)
+
+    return progress
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
     data = load_data()
@@ -36,6 +77,8 @@ def dashboard():
     target_beers = 4
     target_walk = 10
     target_sleep = 7
+
+    pred_curve = prediction_curve(data, target_beers=target_beers, target_walk=target_walk, target_sleep=target_sleep)
 
     def indicator(current, target, inverse=False):
         if not current:
@@ -155,10 +198,12 @@ def dashboard():
         html += f"<tr><td>{d}</td><td>{e['beers']}</td><td>{e['walk_km']}</td><td>{e['meals']}</td><td>{e['sleep_h']}</td></tr>"
     html += "</table>"
 
-    # Chart.js visual
+    # Chart.js visual - last 14 days
     labels = [d for d in sorted(data.keys())[-14:]]
     beers = [data[d]["beers"] for d in labels]
     walks = [data[d]["walk_km"] for d in labels]
+    predictions = [pred_curve.get(d, None) for d in labels]
+
     html += f"""
       <script>
         const ctx = document.getElementById('chart').getContext('2d');
@@ -167,13 +212,79 @@ def dashboard():
           data: {{
             labels: {labels},
             datasets: [
-              {{ label: 'Beers', data: {beers}, borderColor: '#ef4444', fill: false }},
-              {{ label: 'Walk km', data: {walks}, borderColor: '#10b981', fill: false }}
+              {{
+                label: 'Beers',
+                data: {beers},
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239,68,68,0.25)',
+                fill: true,
+                tension: 0.25,
+                yAxisID: 'y'
+              }},
+              {{
+                label: 'Walk km',
+                data: {walks},
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16,185,129,0.25)',
+                fill: true,
+                tension: 0.25,
+                yAxisID: 'y'
+              }},
+              {{
+                label: 'Predicted progress %',
+                data: {predictions},
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99,102,241,0.15)',
+                fill: false,
+                tension: 0.25,
+                yAxisID: 'y1'
+              }}
             ]
           }},
           options: {{
             responsive: true,
-            scales: {{ y: {{ beginAtZero: true }} }}
+            interaction: {{
+              mode: 'index',
+              intersect: false
+            }},
+            scales: {{
+              y: {{
+                beginAtZero: true,
+                title: {{
+                  display: true,
+                  text: 'Beers / Walk km'
+                }}
+              }},
+              y1: {{
+                beginAtZero: true,
+                max: 100,
+                position: 'right',
+                grid: {{
+                  drawOnChartArea: false
+                }},
+                title: {{
+                  display: true,
+                  text: 'Predicted progress %'
+                }}
+              }}
+            }},
+            plugins: {{
+              legend: {{
+                labels: {{
+                  usePointStyle: true
+                }}
+              }},
+              tooltip: {{
+                callbacks: {{
+                  label: function(context) {{
+                    if (context.dataset.label === 'Predicted progress %') {{
+                      return context.dataset.label + ': ' + context.parsed.y + '%';
+                    }}
+                    return context.dataset.label + ': ' + context.parsed.y;
+                  }}
+                }}
+              }}
+            }}
           }}
         }});
       </script>
