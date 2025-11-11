@@ -78,6 +78,20 @@ def prediction_curve(data, target_beers=4, target_walk=10, target_sleep=7):
 
     return progress
 
+def visceral_curve(pred):
+    # Heuristic: visceral fat mobilization "kicks in" after consistent adherence.
+    # Below 25% progress: essentially 0 (mainly water/glycogen / habits).
+    # 25-100% progress: scaled up to 100 to show intensity of deep fat work.
+    visceral = {}
+    for d in sorted(pred.keys()):
+        p = pred[d]
+        if p <= 25:
+            val = 0.0
+        else:
+            val = (p - 25) / 75 * 100  # linear ramp from 0 to 100
+        visceral[d] = round(max(0.0, min(100.0, val)), 1)
+    return visceral
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
     data = load_data()
@@ -96,6 +110,7 @@ def dashboard():
     target_sleep = 7
 
     pred_curve = prediction_curve(data, target_beers=target_beers, target_walk=target_walk, target_sleep=target_sleep)
+    visceral = visceral_curve(pred_curve)
 
     def compute_deviation(pred, base):
         common = [d for d in pred.keys() if d in base]
@@ -244,6 +259,7 @@ def dashboard():
     walks = [data.get(d, {}).get("walk_km") if d in data else None for d in labels]
     planned = [baseline.get(d) for d in labels]
     actual = [pred_curve.get(d) if d in pred_curve else None for d in labels]
+    visceral_vals = [visceral.get(d) if d in visceral else None for d in labels]
 
     import json as _json
 
@@ -252,6 +268,7 @@ def dashboard():
     walks_js = _json.dumps(walks)
     planned_js = _json.dumps(planned)
     actual_js = _json.dumps(actual)
+    visceral_js = _json.dumps(visceral_vals)
 
     html += f"""
       <script>
@@ -296,6 +313,16 @@ def dashboard():
                 data: {actual_js},
                 borderColor: '#6366f1',
                 backgroundColor: 'rgba(99,102,241,0.15)',
+                fill: false,
+                spanGaps: true,
+                tension: 0.25,
+                yAxisID: 'y1'
+              }},
+              {{
+                label: 'Visceral burn phase %',
+                data: {visceral_js},
+                borderColor: '#22c55e',
+                backgroundColor: 'rgba(34,197,94,0.12)',
                 fill: false,
                 spanGaps: true,
                 tension: 0.25,
