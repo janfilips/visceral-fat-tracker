@@ -29,6 +29,14 @@ def weekly_summary(data):
         "avg_sleep": avg("sleep_h"),
     }
 
+def baseline_projection(start_date: date, days: int = 28):
+    # Idealized 4-week curve from 0 to 100% if you follow the plan
+    step = 100.0 / (days - 1) if days > 1 else 100.0
+    return {
+        str(start_date + timedelta(days=i)): round(step * i, 1)
+        for i in range(days)
+    }
+
 def prediction_curve(data, target_beers=4, target_walk=10, target_sleep=7):
     # Simple heuristic projection:
     # good days push the score up, bad days slow or drop it.
@@ -74,11 +82,29 @@ def prediction_curve(data, target_beers=4, target_walk=10, target_sleep=7):
 def dashboard():
     data = load_data()
     summary = weekly_summary(data)
+    today = datetime.now().date()
+
+    if data:
+        first_logged_date = min(datetime.strptime(d, "%Y-%m-%d").date() for d in data.keys())
+        baseline = baseline_projection(first_logged_date)
+    else:
+        # If no data yet, start baseline today so graph is pre-filled
+        baseline = baseline_projection(today)
+
     target_beers = 4
     target_walk = 10
     target_sleep = 7
 
     pred_curve = prediction_curve(data, target_beers=target_beers, target_walk=target_walk, target_sleep=target_sleep)
+
+    def compute_deviation(pred, base):
+        common = [d for d in pred.keys() if d in base]
+        if not common:
+            return None
+        diffs = [pred[d] - base[d] for d in common]
+        return round(sum(diffs) / len(diffs), 1)
+
+    deviation = compute_deviation(pred_curve, baseline)
 
     def indicator(current, target, inverse=False):
         if not current:
@@ -178,6 +204,16 @@ def dashboard():
           <div class="indicator" style="background-color:{indicator(summary.get('avg_sleep'), target_sleep)}"></div>
         </div>
       </div>
+      <div style="text-align:center; margin-bottom: 1rem;">
+    """
+    if deviation is None:
+        html += "        <span>Plan loaded. Start logging to see how close you are to the curve.</span>"
+    else:
+        status_text = "On track" if deviation >= -5 else "Slightly behind" if deviation >= -15 else "Off track"
+        status_color = "#16a34a" if deviation >= -5 else "#f97316" if deviation >= -15 else "#dc2626"
+        html += f"        <span style='font-weight:500;color:{status_color};'>Status: {status_text} ({deviation}% vs plan)</span>"
+    html += """
+      </div>
 
       <canvas id="chart" height="100"></canvas>
 
@@ -198,11 +234,24 @@ def dashboard():
         html += f"<tr><td>{d}</td><td>{e['beers']}</td><td>{e['walk_km']}</td><td>{e['meals']}</td><td>{e['sleep_h']}</td></tr>"
     html += "</table>"
 
-    # Chart.js visual - last 14 days
-    labels = [d for d in sorted(data.keys())[-14:]]
-    beers = [data[d]["beers"] for d in labels]
-    walks = [data[d]["walk_km"] for d in labels]
-    predictions = [pred_curve.get(d, None) for d in labels]
+    # Chart.js visual - last 14 days, including baseline (plan) and actual
+    # Collect all dates from baseline and predictions so we can show deviation vs plan
+    all_dates = sorted(set(list(baseline.keys()) + list(pred_curve.keys())))
+    last_labels = all_dates[-14:] if all_dates else []
+
+    labels = last_labels
+    beers = [data.get(d, {}).get("beers") if d in data else None for d in labels]
+    walks = [data.get(d, {}).get("walk_km") if d in data else None for d in labels]
+    planned = [baseline.get(d) for d in labels]
+    actual = [pred_curve.get(d) if d in pred_curve else None for d in labels]
+
+    import json as _json
+
+    labels_js = _json.dumps(labels)
+    beers_js = _json.dumps(beers)
+    walks_js = _json.dumps(walks)
+    planned_js = _json.dumps(planned)
+    actual_js = _json.dumps(actual)
 
     html += f"""
       <script>
@@ -210,32 +259,45 @@ def dashboard():
         new Chart(ctx, {{
           type: 'line',
           data: {{
-            labels: {labels},
+            labels: {labels_js},
             datasets: [
               {{
                 label: 'Beers',
-                data: {beers},
+                data: {beers_js},
                 borderColor: '#ef4444',
                 backgroundColor: 'rgba(239,68,68,0.25)',
+                spanGaps: true,
                 fill: true,
                 tension: 0.25,
                 yAxisID: 'y'
               }},
               {{
                 label: 'Walk km',
-                data: {walks},
+                data: {walks_js},
                 borderColor: '#10b981',
                 backgroundColor: 'rgba(16,185,129,0.25)',
+                spanGaps: true,
                 fill: true,
                 tension: 0.25,
                 yAxisID: 'y'
               }},
               {{
-                label: 'Predicted progress %',
-                data: {predictions},
+                label: 'Planned progress %',
+                data: {planned_js},
+                borderColor: '#9ca3af',
+                backgroundColor: 'rgba(148,163,253,0.08)',
+                borderDash: [4,3],
+                fill: false,
+                tension: 0.15,
+                yAxisID: 'y1'
+              }},
+              {{
+                label: 'Actual progress %',
+                data: {actual_js},
                 borderColor: '#6366f1',
                 backgroundColor: 'rgba(99,102,241,0.15)',
                 fill: false,
+                spanGaps: true,
                 tension: 0.25,
                 yAxisID: 'y1'
               }}
@@ -264,7 +326,7 @@ def dashboard():
                 }},
                 title: {{
                   display: true,
-                  text: 'Predicted progress %'
+                  text: 'Progress %'
                 }}
               }}
             }},
@@ -277,10 +339,11 @@ def dashboard():
               tooltip: {{
                 callbacks: {{
                   label: function(context) {{
-                    if (context.dataset.label === 'Predicted progress %') {{
-                      return context.dataset.label + ': ' + context.parsed.y + '%';
+                    const label = context.dataset.label || '';
+                    if (label.includes('progress')) {{
+                      return label + ': ' + context.parsed.y + '%';
                     }}
-                    return context.dataset.label + ': ' + context.parsed.y;
+                    return label + ': ' + (context.parsed.y !== null ? context.parsed.y : '-');
                   }}
                 }}
               }}
